@@ -26,7 +26,7 @@ const processMessageWithAgent = createStep({
 
     const threadId = `telegram-${inputData.chatId}`;
 
-    const response = await sherlockAgent.generateLegacy(
+    const response = await sherlockAgent.generate(
       [{ role: "user", content: inputData.message }],
       {
         resourceId: "telegram-bot",
