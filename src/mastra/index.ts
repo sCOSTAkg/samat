@@ -10,54 +10,9 @@ import { z } from "zod";
 import { sharedPostgresStorage } from "./storage";
 import { inngest, inngestServe } from "./inngest";
 
-// ======================================================================
-// Option 1: FOR TIME-BASED (CRON) TRIGGERS
-// ======================================================================
-// Call registerCronTrigger() BEFORE the Mastra initialization below.
-//
-// Example:
-//   import { registerCronTrigger } from "../triggers/cronTriggers";
-//   import { myWorkflow } from "./workflows/myWorkflow";
-//
-//   registerCronTrigger({
-//     cronExpression: "0 8 * * *", // Daily at 8 AM
-//     workflow: myWorkflow
-//   });
-//
-// See src/triggers/cronTriggers.ts for details
-// ======================================================================
-// Option 2: FOR WEBHOOK-BASED TRIGGERS
-// ======================================================================
-// Spread trigger registration functions into this apiRoutes array.
-//
-// Pattern:
-//   import { registerYourTrigger } from "../triggers/yourTriggers";
-//   import { myWorkflow } from "./workflows/myWorkflow";
-//
-//   ...registerYourTrigger({
-//     triggerType: "your/event.type",
-//     handler: async (mastra, triggerInfo) => {
-//       const run = await myWorkflow.createRunAsync();
-//       return await run.start({ inputData: { /* your data */ } });
-//     }
-//   })
-//
-// Available: src/triggers/slackTriggers.ts, telegramTriggers.ts, exampleConnectorTrigger.ts
-// ======================================================================
-
-// ======================================================================
-// IMPORT YOUR AGENTS AND WORKFLOWS
-// ======================================================================
-// Import your custom agents and workflows here.
-// See src/examples/ directory for complete examples:
-// - src/examples/exampleAgent.ts
-// - src/examples/exampleWorkflow.ts
-// - src/examples/exampleTool.ts
-//
-// Example imports:
-// import { myAgent } from "./agents/myAgent";
-// import { myWorkflow } from "./workflows/myWorkflow";
-// ======================================================================
+import { sherlockAgent } from "./agents/sherlockAgent";
+import { telegramBotWorkflow } from "./workflows/telegramBotWorkflow";
+import { registerTelegramTrigger } from "../triggers/telegramTriggers";
 
 class ProductionPinoLogger extends MastraLogger {
   protected logger: pino.Logger;
@@ -102,10 +57,8 @@ class ProductionPinoLogger extends MastraLogger {
 
 export const mastra = new Mastra({
   storage: sharedPostgresStorage,
-  // Register your workflows here
-  workflows: {},
-  // Register your agents here
-  agents: {},
+  workflows: { telegramBotWorkflow },
+  agents: { sherlockAgent },
   mcpServers: {
     allTools: new MCPServer({
       name: "allTools",
@@ -159,18 +112,37 @@ export const mastra = new Mastra({
       },
     ],
     apiRoutes: [
-      // ======================================================================
-      // Inngest Integration Endpoint
-      // ======================================================================
-      // Integrates Mastra workflows with Inngest for event-driven execution via inngest functions.
       {
         path: "/api/inngest",
         method: "ALL",
         createHandler: async ({ mastra }) => inngestServe({ mastra, inngest }),
       },
 
-      // Add webhook triggers here (see Option 2 above)
-      // Example: ...registerSlackTrigger({ ... })
+      ...registerTelegramTrigger({
+        triggerType: "telegram/message",
+        handler: async (mastra, triggerInfo) => {
+          const logger = mastra.getLogger();
+          logger?.info("🤖 [Telegram Trigger] Received message", {
+            userName: triggerInfo.params.userName,
+            message: triggerInfo.params.message,
+          });
+
+          const chatId = triggerInfo.payload?.message?.chat?.id;
+          if (!chatId) {
+            logger?.error("❌ [Telegram Trigger] No chat ID found in payload");
+            throw new Error("No chat ID found in Telegram payload");
+          }
+
+          const run = await telegramBotWorkflow.createRunAsync();
+          await run.start({
+            inputData: {
+              userName: triggerInfo.params.userName || "Unknown",
+              message: triggerInfo.params.message,
+              chatId: chatId,
+            },
+          });
+        },
+      }),
     ],
   },
   logger:
