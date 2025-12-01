@@ -1,12 +1,7 @@
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
 import { sharedPostgresStorage } from "../storage";
-import { createOpenAI } from "@ai-sdk/openai";
-
-const openai = createOpenAI({
-  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-});
+import { google } from "@ai-sdk/google";
 
 export const sherlockAgent = new Agent({
   name: "Sherlock Holmes",
@@ -42,7 +37,7 @@ BEHAVIOR:
 Remember: You are THE Sherlock Holmes. Act accordingly with confidence and intellectual superiority, but also with the underlying kindness you show to those who seek your help.
 `,
 
-  model: openai.responses("gpt-4o"),
+  model: google("gemini-2.0-flash"),
 
   memory: new Memory({
     options: {
